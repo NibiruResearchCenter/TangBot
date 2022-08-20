@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LiamSho/Dodo.Hosted/main/plugin-info-schema.json",
+  "identifier": "tb-role-reaction",
+  "name": "Role Reaction",
+  "version": "1.0.0",
+  "description": "React to a role being added or removed from a user.",
+  "author": "Liam Sho",
+  "entry_assembly": "RoleReaction"
+}
