@@ -15,6 +15,7 @@ using DoDo.Open.Sdk.Models.Channels;
 using DoDo.Open.Sdk.Models.Messages;
 using DoDo.Open.Sdk.Models.Roles;
 using DoDo.Open.Sdk.Services;
+using DodoHosted.Base;
 using DodoHosted.Base.App.Helpers;
 using DodoHosted.Base.App.Interfaces;
 using DodoHosted.Base.App.Models;
@@ -27,8 +28,13 @@ namespace RoleReaction;
 
 public class RoleReactionCommand : ICommandExecutor
 {
-    public async Task<CommandExecutionResult> Execute(string[] args, CommandMessage message, IServiceProvider provider, IPermissionManager permissionManager,
-        Func<string, Task<string>> reply, bool shouldAllow = false)
+    public async Task<CommandExecutionResult> Execute(
+        string[] args,
+        CommandMessage message,
+        IServiceProvider provider,
+        IPermissionManager permissionManager,
+        PluginBase.Reply reply,
+        bool shouldAllow = false)
     {
         var action = args.Skip(1).FirstOrDefault();
         
@@ -108,7 +114,7 @@ public class RoleReactionCommand : ICommandExecutor
         string islandId,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var result = collection
             .AsQueryable()
@@ -140,7 +146,7 @@ public class RoleReactionCommand : ICommandExecutor
         OpenApiService openApiService,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply,
+        PluginBase.Reply reply,
         bool isEnable)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
@@ -208,7 +214,7 @@ public class RoleReactionCommand : ICommandExecutor
     private static async Task<CommandExecutionResult> CreatorNewCommand(
         IMongoCollection<ReactionMessage> collection,
         string islandId,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var newMessage = new ReactionMessage
         {
@@ -234,7 +240,7 @@ public class RoleReactionCommand : ICommandExecutor
         string position,
         string content,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
         if (isGuid is false)
@@ -282,7 +288,7 @@ public class RoleReactionCommand : ICommandExecutor
         OpenApiService openApiService,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
         if (isGuid is false)
@@ -341,7 +347,7 @@ public class RoleReactionCommand : ICommandExecutor
         OpenApiService openApiService,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
         if (isGuid is false)
@@ -394,7 +400,7 @@ public class RoleReactionCommand : ICommandExecutor
         string id,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
         if (isGuid is false)
@@ -420,7 +426,7 @@ public class RoleReactionCommand : ICommandExecutor
         OpenApiService openApiService,
         IReadOnlyDictionary<string, string> islandRoles,
         IMongoCollection<ReactionMessage> collection,
-        Func<string, Task<string>> reply)
+        PluginBase.Reply reply)
     {
         var isGuid = Guid.TryParse(id, out var rrId);
         if (isGuid is false)

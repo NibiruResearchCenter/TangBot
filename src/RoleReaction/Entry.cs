@@ -17,7 +17,7 @@ namespace RoleReaction;
 
 public class Entry : IPluginLifetime
 {
-    public Task Load(ILogger logger)
+    public Task Load(IServiceProvider serviceProvider, ILogger logger)
     {
         logger.LogInformation("已载入 RoleReaction 插件");
         

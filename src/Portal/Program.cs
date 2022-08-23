@@ -12,14 +12,13 @@
 
 using DodoHosted.App.Core;
 using DodoHosted.Lib.Plugin;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Events;
 
 PluginManager.NativeAssemblies.AddRange(new []
 {
-    typeof(RoleReaction.Entry).Assembly
+    // typeof(RoleReaction.Entry).Assembly
+    typeof(BiliLivePush.Entry).Assembly
 });
 
 const string LoggerTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] <{ThreadId} {ThreadName}> {Message:lj}{NewLine}{Exception}";
@@ -34,20 +33,16 @@ Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
     .CreateLogger();
 
-var builder = Host.CreateDefaultBuilder();
+var builder = WebApplication.CreateBuilder();
 
-builder.ConfigureLogging(loggingBuilder =>
-{
-    loggingBuilder.ClearProviders();
-});
+builder.Logging.ClearProviders();
+builder.Host.UseSerilog();
 
-builder.UseSerilog();
-
-builder.ConfigureServices((_, services) =>
-{
-    services.AddDodoHostedServices();
-});
+builder.Services.AddDodoHostedServices();
+builder.Services.AddDodoHostedWebServices();
 
 var app = builder.Build();
+
+app.UseDodoHostedWebPipeline();
 
 await app.RunAsync();
