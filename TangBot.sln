@@ -4,6 +4,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoleReaction", "src\RoleRea
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Portal", "src\Portal\Portal.csproj", "{71039110-BA0D-483B-979F-7915001BC3F5}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "App", "App", "{3CB857FF-E232-487C-9795-20C75F6D2545}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Plugin", "Plugin", "{671B4993-B000-4A0E-8AA0-E1A679266426}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +22,9 @@ Global
 		{71039110-BA0D-483B-979F-7915001BC3F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{71039110-BA0D-483B-979F-7915001BC3F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{71039110-BA0D-483B-979F-7915001BC3F5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{71039110-BA0D-483B-979F-7915001BC3F5} = {3CB857FF-E232-487C-9795-20C75F6D2545}
+		{3BB23EED-D804-4086-87C3-01A650B70DB6} = {671B4993-B000-4A0E-8AA0-E1A679266426}
 	EndGlobalSection
 EndGlobal
