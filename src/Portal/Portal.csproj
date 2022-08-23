@@ -15,7 +15,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\BiliLivePush\BiliLivePush.csproj" />
       <ProjectReference Include="..\RoleReaction\RoleReaction.csproj" />
     </ItemGroup>
 
