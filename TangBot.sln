@@ -20,6 +20,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		build.ps1 = build.ps1
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BilibiliLiveInformer", "src\BilibiliLiveInformer\BilibiliLiveInformer.csproj", "{9137CB02-16C1-415A-9AA8-E8A8473BAF61}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Worker", "Worker", "{A2964994-8F4E-42F6-A6E8-9390BF5B18BC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -38,10 +42,15 @@ Global
 		{C4DD7CAF-7851-4E38-ADA8-863C12401AC5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C4DD7CAF-7851-4E38-ADA8-863C12401AC5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C4DD7CAF-7851-4E38-ADA8-863C12401AC5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9137CB02-16C1-415A-9AA8-E8A8473BAF61}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9137CB02-16C1-415A-9AA8-E8A8473BAF61}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9137CB02-16C1-415A-9AA8-E8A8473BAF61}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9137CB02-16C1-415A-9AA8-E8A8473BAF61}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{71039110-BA0D-483B-979F-7915001BC3F5} = {3CB857FF-E232-487C-9795-20C75F6D2545}
 		{3BB23EED-D804-4086-87C3-01A650B70DB6} = {671B4993-B000-4A0E-8AA0-E1A679266426}
 		{C4DD7CAF-7851-4E38-ADA8-863C12401AC5} = {671B4993-B000-4A0E-8AA0-E1A679266426}
+		{9137CB02-16C1-415A-9AA8-E8A8473BAF61} = {671B4993-B000-4A0E-8AA0-E1A679266426}
 	EndGlobalSection
 EndGlobal
