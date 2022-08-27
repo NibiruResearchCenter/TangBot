@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/LiamSho/Dodo.Hosted/main/plugin-info-schema.json",
   "identifier": "tb-bilibili-live-informer",
   "name": "Bilibili Live Informer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Subscribe to Bilibili User to get informed when they are live.",
   "author": "Liam Sho",
   "entry_assembly": "BilibiliLiveInformer"
