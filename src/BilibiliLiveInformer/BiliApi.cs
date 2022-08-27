@@ -65,10 +65,9 @@ public static class BiliApi
     
     public static async Task<BiliApiListener.ExecutionResult> GetLiveStatus(string uid, CancellationToken token)
     {
-        var content = await GetBiliUserInfo(uid, token);
+        var json = await GetBiliUserInfo(uid, token);
         
-        var json = await JsonDocument.ParseAsync(content, cancellationToken: token);
-        var liveRoom = json.RootElement.GetProperty("data").GetProperty("live_room");
+        var liveRoom = json.GetProperty("data").GetProperty("live_room");
                 
         var isLive = liveRoom.GetProperty("liveStatus").GetInt32() is 1;
         var title = liveRoom.GetProperty("title").GetString()!;
@@ -80,10 +79,9 @@ public static class BiliApi
     {
         try
         {
-            var content = await GetBiliUserInfo(uid, CancellationToken.None);
+            var json = await GetBiliUserInfo(uid, CancellationToken.None);
         
-            var json = await JsonDocument.ParseAsync(content);
-            var data = json.RootElement.GetProperty("data");
+            var data = json.GetProperty("data");
 
             var name = data.GetProperty("name").GetString()!;
             var roomId = data.GetProperty("live_room").GetProperty("roomid").GetInt64().ToString();
@@ -103,7 +101,7 @@ public static class BiliApi
         }
     }
 
-    private static async Task<Stream> GetBiliUserInfo(string uid, CancellationToken token)
+    private static async Task<JsonElement> GetBiliUserInfo(string uid, CancellationToken token)
     {
         try
         {
@@ -113,8 +111,19 @@ public static class BiliApi
             
             s_apiRequestCount++;
             CheckStatisticReset();
+
+            var stream = await content.Content.ReadAsStreamAsync(token);
+            var json = await JsonDocument.ParseAsync(stream, cancellationToken: token);
             
-            return await content.Content.ReadAsStreamAsync(token);
+            var code = json.RootElement.GetProperty("code").GetInt32();
+            var message = json.RootElement.GetProperty("message").GetString();
+
+            if (code != 0)
+            {
+                throw new HttpRequestException($"请求 Bilibili API 失败，Code：{code}，Message：{message}");
+            }
+
+            return json.RootElement;
         }
         catch (Exception)
         {
