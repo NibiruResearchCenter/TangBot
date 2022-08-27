@@ -27,14 +27,33 @@ public static class BiliApi
             }
             var duration = (DateTimeOffset.UtcNow - s_startTime).TotalSeconds;
             var minute = duration / 60;
+            var hour = minute / 60;
             var rate = s_apiRequestCount / minute;
 
-            return $"{rate:0.00} reqs/min ({s_apiRequestCount} reqs in {duration:0.00} seconds or {minute:0.00} minutes)";
+            return $"{rate:0.00} reqs/min ({s_apiRequestCount} reqs in {minute:0.00} minutes or {hour:0.00} hours)";
+        }
+    }
+
+    public static string FailedRequestRate
+    {
+        get
+        {
+            if (s_failedRequestCount == 0)
+            {
+                return "NaN reqs/min";
+            }
+            var duration = (DateTimeOffset.UtcNow - s_startTime).TotalSeconds;
+            var minute = duration / 60;
+            var hour = minute / 60;
+            var rate = s_failedRequestCount / minute;
+
+            return $"{rate:0.0000} reqs/min ({s_failedRequestCount} reqs in {minute:0.00} minutes or {hour:0.00} hours)";
         }
     }
 
     private static DateTimeOffset s_startTime = DateTimeOffset.UtcNow;
     private static int s_apiRequestCount;
+    private static int s_failedRequestCount;
     
     private static readonly HttpClient s_httpClient = new()
     {
@@ -86,18 +105,35 @@ public static class BiliApi
 
     private static async Task<Stream> GetBiliUserInfo(string uid, CancellationToken token)
     {
-        var content = await s_httpClient.GetStreamAsync($"https://api.bilibili.com/x/space/acc/info?mid={uid}&jsonp=jsonp", token);
-
-        s_apiRequestCount++;
-
-        if (s_apiRequestCount != int.MaxValue)
+        try
         {
-            return content;
+            var content = await s_httpClient.GetAsync($"https://api.bilibili.com/x/space/acc/info?mid={uid}&jsonp=jsonp", token);
+            
+            content.EnsureSuccessStatusCode();
+            
+            s_apiRequestCount++;
+            CheckStatisticReset();
+            
+            return await content.Content.ReadAsStreamAsync(token);
+        }
+        catch (Exception)
+        {
+            s_failedRequestCount++;
+            CheckStatisticReset();
+            
+            throw;
+        }
+    }
+
+    private static void CheckStatisticReset()
+    {
+        if (s_apiRequestCount != int.MaxValue && s_failedRequestCount != int.MaxValue)
+        {
+            return;
         }
 
-        s_apiRequestCount = 1;
+        s_apiRequestCount = 0;
+        s_failedRequestCount = 0;
         s_startTime = DateTimeOffset.UtcNow;
-
-        return content;
     }
 }

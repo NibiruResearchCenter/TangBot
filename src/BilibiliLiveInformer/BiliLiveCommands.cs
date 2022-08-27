@@ -191,7 +191,7 @@ public class BiliLiveCommands : ICommandExecutor
 
     private static async Task<CommandExecutionResult> RunStatistic(PluginBase.Reply reply)
     {
-        await reply.Invoke($"API Request Rate: {BiliApi.ApiRequestRate}");
+        await reply.Invoke($"API Request Rate: {BiliApi.ApiRequestRate}\nAPI Failed Request Rate: {BiliApi.FailedRequestRate}");
         return CommandExecutionResult.Success;
     }
 }
