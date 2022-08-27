@@ -106,7 +106,7 @@ public class BiliApiListener : IPluginHostedService
                             {
                                 ChannelId = channel.ChannelId,
                                 MessageBody = new MessageBodyText { Content = message }
-                            });
+                            }, true);
                         }
                     }
                     await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
@@ -121,7 +121,7 @@ public class BiliApiListener : IPluginHostedService
             catch (Exception e)
             {
                 await channelLogger.LogError(HostEnvs.DodoHostedAdminIsland,
-                    $"BiliApiListener 发生错误: `{e.GetType().FullName}` {e.Message}");
+                    $"BiliApiListener 发生错误: `{e.GetType().FullName}` {e.Message}\n{e.StackTrace}");
             }
         }
     }
