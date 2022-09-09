@@ -16,7 +16,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\BilibiliLiveInformer\BilibiliLiveInformer.csproj" />
-      <ProjectReference Include="..\LiveSchedule\LiveSchedule.csproj" />
       <ProjectReference Include="..\RoleReaction\RoleReaction.csproj" />
     </ItemGroup>
 
