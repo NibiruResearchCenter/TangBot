@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/LiamSho/Dodo.Hosted/main/plugin-info-schema.json",
   "identifier": "tb-bilibili-live-notification",
   "name": "Bilibili Live Notification",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Send notification messages when Bilibili user starts live.",
   "author": "Liam Sho",
   "entry_assembly": "BilibiliLiveNotification",
