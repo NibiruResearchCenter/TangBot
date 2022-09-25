@@ -10,20 +10,9 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY
 
-using DodoHosted.Open.Plugin;
-using Microsoft.Extensions.Logging;
+namespace BilibiliLiveNotification.Model;
 
-namespace BilibiliLiveInformer;
-
-public class Entry : IPluginLifetime
+public record PluginConfiguration
 {
-    public Task Load(IServiceProvider serviceProvider, ILogger logger)
-    {
-        return Task.CompletedTask;
-    }
-
-    public Task Unload(ILogger logger)
-    {
-        return Task.CompletedTask;
-    }
+    public required int JobRunningInterval { get; set; }
 }

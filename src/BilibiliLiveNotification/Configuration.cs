@@ -10,11 +10,19 @@
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY
 
-// ReSharper disable InconsistentNaming
-namespace BilibiliLiveInformer;
+using BilibiliLiveNotification.Constants;
+using BilibiliLiveNotification.Model;
+using DodoHosted.Open.Plugin;
 
-public static class Constants
+namespace BilibiliLiveNotification;
+
+public sealed class Configuration : DodoHostedPluginConfiguration
 {
-    public const string MONGO_SUBSCRIBED_LIVER_COLLECTION = "bilibili-live-informer-subscribed-liver";
-    public const string MONGO_CURRENT_STATUS_COLLECTION = "bilibili-live-informer-current-status";
+    public override Dictionary<Type, string> RegisterMongoDbCollection()
+    {
+        return new Dictionary<Type, string>
+        {
+            { typeof(SubscribedLiver), MongoCollectionNames.SubscribedLiverCollection }
+        };
+    }
 }

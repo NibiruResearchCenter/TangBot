@@ -16,7 +16,12 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\BilibiliLiveNotification\BilibiliLiveNotification.csproj" />
       <ProjectReference Include="..\RoleReaction\RoleReaction.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="logs" />
     </ItemGroup>
 
 </Project>

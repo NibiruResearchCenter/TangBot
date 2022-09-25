@@ -1,7 +1,7 @@
 $Plugins = New-Object System.Collections.Generic.Dictionary"[String, String]"
 
 $Plugins.Add('src/RoleReaction', 'tb-role-reaction')
-$Plugins.Add('src/BilibiliLiveInformer', 'tb-bilibili-live-informer')
+$Plugins.Add('src/BilibiliLiveNotification', 'tb-bilibili-live-notification')
 
 $OutputDirectory = [System.IO.Path]::Combine($PSScriptRoot, 'publish')
 
