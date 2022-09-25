@@ -15,210 +15,113 @@ using DoDo.Open.Sdk.Models.Channels;
 using DoDo.Open.Sdk.Models.Messages;
 using DoDo.Open.Sdk.Models.Roles;
 using DoDo.Open.Sdk.Services;
-using DodoHosted.Base;
-using DodoHosted.Base.App.Helpers;
-using DodoHosted.Base.App.Interfaces;
-using DodoHosted.Base.App.Models;
+using DodoHosted.Base.App.Attributes;
+using DodoHosted.Base.App.Command;
+using DodoHosted.Base.App.Context;
+using DodoHosted.Base.App.Types;
+using DodoHosted.Base.Card.Enums;
 using DodoHosted.Open.Plugin;
-using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using RoleReaction.Model;
 
+// ReSharper disable MemberCanBeMadeStatic.Global
+// ReSharper disable MemberCanBePrivate.Global
+
 namespace RoleReaction;
 
-public class RoleReactionCommand : ICommandExecutor
+public sealed class RoleReactionCommand : ICommandExecutor
 {
-    public async Task<CommandExecutionResult> Execute(
-        string[] args,
-        CommandMessage message,
-        IServiceProvider provider,
-        IPermissionManager permissionManager,
-        PluginBase.Reply reply,
-        bool shouldAllow = false)
-    {
-        var action = args.Skip(1).FirstOrDefault();
-        
-        if (shouldAllow is false)
-        {
-            var p = action switch
-            {
-                "list" => "rr.list",
-                "creator" => "rr.creator",
-                "enable" or "disable" => "rr.status",
-                _ => null
-            };
-
-            if (p is null)
-            {
-                return CommandExecutionResult.Unknown;
-            }
-
-            if (await permissionManager.CheckPermission(p, message) is false)
-            {
-                return CommandExecutionResult.Unauthorized;
-            }
-        }
-
-        var collection = provider.GetRequiredService<IMongoDatabase>().GetCollection<ReactionMessage>("tb-rr-messages");
-        var openApi = provider.GetRequiredService<OpenApiService>();
-        var islandRoles = (await openApi
-            .GetRoleListAsync(new GetRoleListInput { IslandId = message.IslandId }, true))
-            .ToDictionary(x => x.RoleId, x => x.RoleName);
-
-        return args switch
-        {
-            [_, "list"] => await ListCommand(message.IslandId, islandRoles, collection, reply),
-            [_, "enable", var id, var channel] => await StatusCommand(id, channel, openApi, islandRoles, collection, reply, true),
-            [_, "disable", var id] => await StatusCommand(id, null, openApi, islandRoles, collection, reply, false),
-            [_, "render", var id] => await RenderCommand(id, islandRoles, collection, reply),
-            [_, "update", var id] => await UpdateCommand(id, openApi, islandRoles, collection, reply),
-            [_, "creator", ..var creatorArgs] => creatorArgs switch
-            {
-                ["new"] => await CreatorNewCommand(collection, message.IslandId, reply),
-                ["set", var rrId, var position, var content] => await CreatorSetCommand(rrId, position, content, collection, reply),
-                ["role", "add", var rrId, var emoji, var role] => await CreatorRoleAddCommand(rrId, emoji, role, openApi, islandRoles, collection, reply),
-                ["role", "remove",var rrId, var emoji] => await CreatorRoleRemoveCommand(rrId, emoji, openApi, islandRoles, collection, reply),
-                _ => CommandExecutionResult.Unknown
-            },
-            _ => CommandExecutionResult.Unknown
-        };
-    }
-
-    public CommandMetadata GetMetadata() => new(
-        CommandName: "rr",
-        Description: "配置 RoleReaction",
-        HelpText: @"""
-- `{{PREFIX}}rr list`  列出已有的 RR 消息
-- `{{PREFIX}}rr update <RR ID>`  更新某条消息
-- `{{PREFIX}}rr render <RR ID>`  渲染消息查看样式
-- `{{PREFIX}}rr enable <RR ID> <频道 ID/#频道>`  启用消息并发送在某个频道中
-- `{{PREFIX}}rr disable <RR ID>`  停用消息并移除在频道中的消息
-- `{{PREFIX}}rr creator new`  创建一个新的消息
-- `{{PREFIX}}rr creator set <RR ID> <header/footer/body> <message/template>`  设置某个部分的内容
-- `{{PREFIX}}rr creator role add <RR ID> <emoji> <身份组 ID>`  设置身份组与 Emoji 的关联
-- `{{PREFIX}}rr creator role remove <RR ID> <emoji>`  删除身份组与 Emoji 的关联
-- `{{PREFIX}}rr creator delete <RR ID>`  删除某个 RR 消息
-""",
-        PermissionNodes: new Dictionary<string, string>
-        {
-            { "rr.list", "查看 RR 消息信息" },
-            { "rr.creator", "创建或编辑 RR 消息" },
-            { "rr.status", "开启或关闭 RR 消息" }
-        });
-
     // ReSharper disable InconsistentNaming
     private const string MESSAGE_SEND_FAILED = "MESSAGE_SEND_FAILED";
     private const string MESSAGE_UPDATE_FAILED = "MESSAGE_UPDATE_FAILED";
     
-    private static async Task<CommandExecutionResult> ListCommand(
-        string islandId,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
+    public async Task<bool> ListReactionMessages(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("page", "p", "页码", false)] int? page)
     {
-        var result = collection
-            .AsQueryable()
-            .Where(x => x.IslandId == islandId)
-            .ToList();
-        
-        var builder = new StringBuilder();
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId)
+            .ToListAsync();
 
-        builder.AppendLine($"共有 ***{result.Count}*** 条 RR 消息");
-        foreach (var message in result)
+        const int PageSize = 5;
+        
+        var p = page ?? 1;
+        var total = result.Count;
+        var pages = (int)Math.Ceiling(total / (double) PageSize);
+        
+        var messages = result.Skip(PageSize * (p - 1)).Take(PageSize).ToArray();
+        if (messages.Length == 0)
         {
-            var channel = message.Enabled ? $"<#{message.Channel}>" : "未开启";
-            builder.AppendLine($"- `{message.Id}` 位于频道 {channel}");
-            foreach (var reactionEmoji in message.Emojis)
+            if (p == 1)
             {
-                var roleName = islandRoles.ContainsKey(reactionEmoji.RoleId) ? $"`{islandRoles[reactionEmoji.RoleId]}`" : "~~`未知`~~";
-                builder.AppendLine($"  $ {reactionEmoji.EmojiCode} ({reactionEmoji.EmojiId}, `U+{reactionEmoji.EmojiId:X4}`): {roleName} ({reactionEmoji.RoleId})");
+                await context.Reply.Invoke("没有找到 RR 消息");
             }
-        }
-
-        await reply.Invoke(builder.ToString());
-
-        return CommandExecutionResult.Success;
-    }
-
-    private static async Task<CommandExecutionResult> StatusCommand(
-        string id,
-        string? channel,
-        OpenApiService openApiService,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply,
-        bool isEnable)
-    {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
-        {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
-        }
-        
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
-        {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
-        }
-
-        if (isEnable is false)
-        {
-            message.Enabled = false;
-            if (string.IsNullOrEmpty(message.MessageId) is false)
+            else
             {
-                var result = await openApiService.SetChannelMessageWithdrawAsync(new SetChannelMessageWithdrawInput
-                {
-                    MessageId = message.MessageId, Reason = "RR 消息已停用"
-                });
-
-                if (result is false)
-                {
-                    await reply.Invoke("RR 消息撤回失败，请手动撤回");
-                }
+                await context.Reply.Invoke("没有更多的 RR 消息了");
             }
 
-            message.Channel = string.Empty;
-            message.MessageId = string.Empty;
-            await collection.ReplaceOneAsync(x => x.Id == rrId, message);
-            await reply.Invoke("已 ***关闭*** 该消息");
-
-            return CommandExecutionResult.Success;
+            return true;
         }
 
-        var channelId = channel?.ExtractChannelId();
-        if (channelId is null)
+        var channels = await openApiService.GetChannelListAsync(new GetChannelListInput
         {
-            await reply.Invoke("频道 ID 不能为空");
-            return CommandExecutionResult.Failed;
-        }
-        
-        message.Enabled = true;
-        message.Channel = channelId;
-        var msgId = await UpdateMessage(message, islandRoles, openApiService);
-        
-        if (msgId is MESSAGE_SEND_FAILED or MESSAGE_UPDATE_FAILED)
-        {
-            await reply.Invoke("RR 消息发送或更新失败");
-            return CommandExecutionResult.Failed;
-        }
+            IslandId = context.EventInfo.IslandId
+        });
 
-        message.MessageId = msgId;
-        
-        await collection.ReplaceOneAsync(x => x.Id == rrId, message);
-        await reply.Invoke("已 ***开启*** 该消息");
-        return CommandExecutionResult.Success;
+        var card = RoleReactionCardMessages
+            .GetRoleReactionMessageListCard($"RR 消息列表 ({p}/{pages})", CardTheme.Indigo, channels, messages);
+
+        await context.ReplyCard.Invoke(card);
+        return true;
     }
 
-    private static async Task<CommandExecutionResult> CreatorNewCommand(
-        IMongoCollection<ReactionMessage> collection,
-        string islandId,
-        PluginBase.Reply reply)
+    public async Task<bool> GetReactionMessageDetail(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+        
+        var channels = await openApiService.GetChannelListAsync(new GetChannelListInput
+        {
+            IslandId = context.EventInfo.IslandId
+        });
+        var roles = await openApiService.GetRoleListAsync(new GetRoleListInput
+        {        
+            IslandId = context.EventInfo.IslandId
+        });
+        
+        var card = result.GetRoleReactionMessageDetailCard("RR 消息详情", CardTheme.Indigo, channels, roles);
+        await context.ReplyCard.Invoke(card);
+        return true;
+    }
+
+    public async Task<bool> CreateNewMessage(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection)
     {
         var newMessage = new ReactionMessage
         {
-            IslandId = islandId,
+            IslandId = context.EventInfo.IslandId,
             Channel = string.Empty,
             Emojis = new List<ReactionEmoji>(),
             Enabled = false,
@@ -226,283 +129,354 @@ public class RoleReactionCommand : ICommandExecutor
             FooterText = string.Empty,
             BodyTemplate = "- 点击 {{Emoji}} 获取 {{Role}} 身份组"
         };
-
-        await collection.InsertOneAsync(newMessage);
-
-        var id = newMessage.Id;
-        await reply.Invoke($"已创建新的消息，ID：{id}");
         
-        return CommandExecutionResult.Success;
+        await collection.InsertOneAsync(newMessage);
+        
+        var id = newMessage.Id;
+        await context.Reply.Invoke($"已创建新的消息，ID：{id}");
+
+        return true;
     }
 
-    private static async Task<CommandExecutionResult> CreatorSetCommand(
-        string id,
-        string position,
-        string content,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
+    public async Task<bool> SetMessageTemplate(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("position", "p", "位置，可以为 `header` `body` `footer`，在 `body` 中使用 `{{Emoji}}` 标记 Emoji 位置，`{{Role}}` 标记身份组名")] string position,
+        [CmdOption("template", "t", "模版")] string template,
+        [CmdOption("id", "i", "RR 消息 ID")] string id)
     {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
         {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
         }
         
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
-        {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
-        }
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
 
-        string replyMessage;
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+        
         switch (position)
         {
             case "header":
-                message.HeaderText = content;
-                replyMessage = $"已修改头部文本为 `{content}`";
-                break;
-            case "footer":
-                message.FooterText = content;
-                replyMessage = $"已修改底部文本为 `{content}`";
+                result.HeaderText = template;
                 break;
             case "body":
-                message.BodyTemplate = content;
-                replyMessage = $"已修改本体模版为 `{content}`";
+                result.BodyTemplate = template;
+                break;
+            case "footer":
+                result.FooterText = template;
                 break;
             default:
-                return CommandExecutionResult.Unknown;
+                await context.Reply.Invoke("无效的位置");
+                return false;
         }
-
-        await collection.FindOneAndReplaceAsync(x => x.Id == rrId, message);
-        await reply.Invoke(replyMessage);
-
-        return CommandExecutionResult.Success;
-    }
-    
-    private static async Task<CommandExecutionResult> CreatorRoleAddCommand(
-        string id,
-        string emoji,
-        string roleId,
-        OpenApiService openApiService,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
-    {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
-        {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
-        }
-
-        var emojiId = emoji.GetEmojiId();
         
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        var channels = await openApiService.GetChannelListAsync(new GetChannelListInput
         {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
+            IslandId = context.EventInfo.IslandId
+        });
+        var roles = await openApiService.GetRoleListAsync(new GetRoleListInput
+        {
+            IslandId = context.EventInfo.IslandId
+        });
+        
+        var card = result.GetRoleReactionMessageDetailCard("RR 消息详情", CardTheme.Indigo, channels, roles);
+        await context.ReplyCard.Invoke(card);
+        return true;
+    }
+
+    public async Task<bool> AddRole(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id,
+        [CmdOption("role", "r", "身份组 ID")] string roleId,
+        [CmdOption("emoji", "e", "Emoji")] DodoEmoji emoji)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
         }
 
-        if (islandRoles.ContainsKey(roleId) is false)
+        if (result.Emojis.Any(x => x.EmojiId == emoji.EmojiId) || result.Emojis.Any(x => x.RoleId == roleId))
         {
-            await reply.Invoke($"身份组 {roleId} 不存在");
-            return CommandExecutionResult.Failed;
+            await context.Reply.Invoke("已存在相同的 Emoji 或身份组");
+            return false;
         }
 
-        var emojiExists = message.Emojis.FirstOrDefault(x => x.EmojiId == emojiId);
-        if (emojiExists is not null)
+        var roleList = await openApiService.GetRoleListAsync(new GetRoleListInput
         {
-            await reply.Invoke($"Emoji {emojiExists.EmojiCode} ({emojiExists.EmojiId}) 已被使用，权限组 `{islandRoles[emojiExists.RoleId]}` ({emojiExists.RoleId})");
-            return CommandExecutionResult.Failed;
-        }
+            IslandId = context.EventInfo.IslandId
+        }, true);
 
-        message.Emojis.Add(new ReactionEmoji
+        var role = roleList.FirstOrDefault(x => x.RoleId == roleId);
+        if (role is null)
         {
-            EmojiId = emojiId,
-            EmojiCode = emoji,
+            await context.Reply.Invoke($"没有找到 ID 为 {roleId} 的身份组");
+            return false;
+        }
+        
+        result.Emojis.Add(new ReactionEmoji
+        {
+            EmojiCode = emoji.Emoji,
+            EmojiId = emoji.EmojiId,
             RoleId = roleId
         });
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        await context.Reply.Invoke($"已添加 {emoji.Emoji} - {role.RoleName} ({role.RoleId}");
+        return true;
+    }
 
-        if (message.Enabled)
+    public async Task<bool> RemoveRole(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [CmdOption("id", "i", "RR 消息 ID")] string id,
+        [CmdOption("emoji", "e", "Emoji")] DodoEmoji emoji)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
         {
-            var msgId = await UpdateMessage(message, islandRoles, openApiService);
-
-            if (msgId is MESSAGE_SEND_FAILED or MESSAGE_UPDATE_FAILED)
-            {
-                await reply.Invoke("更新或发送消息失败");
-            }
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
         }
         
-        await collection.FindOneAndReplaceAsync(x => x.Id == rrId, message);
-        await reply.Invoke($"已添加 Reaction: {emoji} ({emojiId}) -> `{islandRoles[roleId]}` ({roleId})");
-        return CommandExecutionResult.Success;
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+
+        if (result.Emojis.Any(x => x.EmojiId == emoji.EmojiId) is false)
+        {
+            await context.Reply.Invoke("没有找到相应的 Emoji");
+            return false;
+        }
+
+        result.Emojis.RemoveAll(x => x.EmojiId == emoji.EmojiId);
+        
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        await context.Reply.Invoke($"已移除 {emoji.Emoji}");
+        return true;
+    }
+
+    public async Task<bool> RenderPreviewMessage(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+
+        var roles = await openApiService.GetRoleListAsync(new GetRoleListInput
+        {
+            IslandId = context.EventInfo.IslandId
+        }, true);
+
+        var message = RenderTextMessage(result, roles);
+        await context.Reply.Invoke(message);
+        return true;
+    }
+
+    public async Task<bool> UpdateMessage(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+
+        if (result.Enabled is false)
+        {
+            await context.Reply.Invoke("该 RR 消息未开启");
+            return false;
+        }
+        
+        var roles = await openApiService.GetRoleListAsync(new GetRoleListInput
+        {
+            IslandId = context.EventInfo.IslandId
+        }, true);
+
+        var response = await UpdateTextMessage(roles, result, openApiService);
+        if (response is MESSAGE_SEND_FAILED or MESSAGE_UPDATE_FAILED)
+        {
+            await context.Reply.Invoke($"发送或更新消息失败 {response}");
+            return false;
+        }
+
+        result.MessageId = response;
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        
+        await context.Reply.Invoke("已更新消息");
+        return true;
+    }
+
+    public async Task<bool> EnableMessage(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id,
+        [CmdOption("channel", "c", "发送频道")] DodoChannelId channel)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+        
+        if (result.Enabled)
+        {
+            await context.Reply.Invoke("该 RR 消息已开启");
+            return false;
+        }
+        
+        var roles = await openApiService.GetRoleListAsync(new GetRoleListInput
+        {
+            IslandId = context.EventInfo.IslandId
+        }, true);
+
+        result.Channel = channel.Value;
+        var response = await UpdateTextMessage(roles, result, openApiService);
+        if (response is MESSAGE_SEND_FAILED or MESSAGE_UPDATE_FAILED)
+        {
+            await context.Reply.Invoke($"发送或更新消息失败 {response}");
+            return false;
+        }
+        
+        result.MessageId = response;
+        result.Enabled = true;
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        await context.Reply.Invoke("已开启 RR 消息");
+        return true;
+    }
+
+    public async Task<bool> DisableMessage(
+        CommandContext context,
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] OpenApiService openApiService,
+        [CmdOption("id", "i", "RR 消息 ID")] string id)
+    {
+        var parsed = Guid.TryParse(id, out var guid);
+        if (parsed is false)
+        {
+            await context.Reply.Invoke("无效的 RR 消息 ID");
+            return false;
+        }
+        
+        var result = await collection
+            .Find(x => x.IslandId == context.EventInfo.IslandId && x.Id == guid)
+            .FirstOrDefaultAsync();
+        if (result is null)
+        {
+            await context.Reply.Invoke("没有找到 RR 消息");
+            return false;
+        }
+        
+        if (result.Enabled is false)
+        {
+            await context.Reply.Invoke("该 RR 消息已关闭");
+            return false;
+        }
+
+        await openApiService.SetChannelMessageWithdrawAsync(new SetChannelMessageWithdrawInput
+        {
+            MessageId = result.MessageId, Reason = "RR 消息已关闭"
+        }, true);
+        
+        result.Enabled = false;
+        await collection.FindOneAndReplaceAsync(x => x.Id == guid, result);
+        await context.Reply.Invoke("已关闭 RR 消息");
+        return true;
     }
     
-    private static async Task<CommandExecutionResult> CreatorRoleRemoveCommand(
-        string id,
-        string emoji,
-        OpenApiService openApiService,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
+    public CommandTreeBuilder GetBuilder()
     {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
-        {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
-        }
-        
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
-        {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
-        }
-
-        var emojiId = emoji.GetEmojiId();
-        
-        var emojiExists = message.Emojis.FirstOrDefault(x => x.EmojiId == emojiId);
-        if (emojiExists is null)
-        {
-            await reply.Invoke($"Emoji {emoji} 不存在");
-            return CommandExecutionResult.Failed;
-        }
-
-        var roleId = emojiExists.RoleId;
-        message.Emojis.Remove(emojiExists);
-
-        if (message.Enabled)
-        {
-            var result = await openApiService.SetChannelMessageReactionRemoveAsync(new SetChannelMessageReactionRemoveInput
-            {
-                DodoId = string.Empty,
-                MessageId = message.MessageId,
-                Emoji = new MessageModelEmoji { Id = emojiId.ToString(), Type = 1 }
-            });
-
-            if (result is false)
-            {
-                await reply.Invoke("移除已添加的 Reaction 失败");
-            }
-        }
-
-        await collection.FindOneAndReplaceAsync(x => x.Id == rrId, message);
-        var roleName = islandRoles.ContainsKey(roleId) ? $"`{islandRoles[roleId]}`" : "~~`未知`~~";
-        await reply.Invoke($"已移除 Reaction: {emoji} ({emojiId}) -> {roleName} ({roleId})");
-        return CommandExecutionResult.Success;
+        return new CommandTreeBuilder("rr", "Role Reaction 消息", "rr")
+            .Then("list", "列出所有 RR 消息", "info", ListReactionMessages)
+            .Then("info", "查看 RR 消息信息", "info", GetReactionMessageDetail)
+            .Then("creator", "创建 RR 消息", "creator", builder: x => x
+                .Then("new", "创建新的 RR 消息", string.Empty, CreateNewMessage)
+                .Then("set", "设置消息组件", string.Empty, SetMessageTemplate)
+                .Then("add", "添加新的反应", string.Empty, AddRole)
+                .Then("remove", "移除一个反应", string.Empty, RemoveRole))
+            .Then("enable", "开启 RR 消息", "creator", EnableMessage)
+            .Then("disable", "关闭 RR 消息", "creator", DisableMessage)
+            .Then("render", "渲染预览消息", "creator", RenderPreviewMessage)
+            .Then("update", "更新 RR 消息", "creator", UpdateMessage);
     }
 
-    private static async Task<CommandExecutionResult> RenderCommand(
-        string id,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
+    private static async Task<string> UpdateTextMessage(IEnumerable<GetRoleListOutput> roleList, ReactionMessage message, OpenApiService openApiService)
     {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
-        {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
-        }
-        
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
-        {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
-        }
-
-        var renderMsg = RenderTextMessage(message, islandRoles);
-        await reply.Invoke(renderMsg);
-        return CommandExecutionResult.Success;
-    }
-
-    private static async Task<CommandExecutionResult> UpdateCommand(
-        string id,
-        OpenApiService openApiService,
-        IReadOnlyDictionary<string, string> islandRoles,
-        IMongoCollection<ReactionMessage> collection,
-        PluginBase.Reply reply)
-    {
-        var isGuid = Guid.TryParse(id, out var rrId);
-        if (isGuid is false)
-        {
-            await reply.Invoke("ID 错误");
-            return CommandExecutionResult.Failed;
-        }
-        
-        var message = await collection.Find(x => x.Id == rrId).FirstOrDefaultAsync();
-        if (message is null)
-        {
-            await reply.Invoke("没有找到该消息");
-            return CommandExecutionResult.Failed;
-        }
-
-        if (message.Enabled is false)
-        {
-            await reply.Invoke("消息未启用");
-            return CommandExecutionResult.Failed;
-        }
-
-        var msgId = await UpdateMessage(message, islandRoles, openApiService);
-        
-        if (msgId is MESSAGE_SEND_FAILED or MESSAGE_UPDATE_FAILED)
-        {
-            await reply.Invoke("RR 消息发送或更新失败");
-            return CommandExecutionResult.Failed;
-        }
-        
-        await reply.Invoke("消息已更新");
-        return CommandExecutionResult.Success;
-    }
-
-    private static string RenderTextMessage(ReactionMessage message, IReadOnlyDictionary<string, string> islandRoles)
-    {
-        var builder = new StringBuilder();
-
-        if (string.IsNullOrWhiteSpace(message.HeaderText) is false)
-        {
-            builder.AppendLine(message.HeaderText);
-            builder.AppendLine();
-        }
-
-        var bodyText = from emoji in message.Emojis
-            let roleName = islandRoles.ContainsKey(emoji.RoleId) ? $"`{islandRoles[emoji.RoleId]}`" : "~~`未知`~~"
-            select message.BodyTemplate
-                .Replace("{{Emoji}}", emoji.EmojiCode)
-                .Replace(" {{Role}}", roleName);
-
-        builder.AppendJoin('\n', bodyText);
-
-        if (string.IsNullOrWhiteSpace(message.FooterText) is false)
-        {
-            builder.AppendLine();
-            builder.AppendLine(message.FooterText);
-        }
-
-        var msg = builder.ToString();
-        return msg;
-    }
-
-    private static async Task<string> UpdateMessage(
-        ReactionMessage message,
-        IReadOnlyDictionary<string, string> islandRoles,
-        OpenApiService openApiService)
-    {
-        var renderMsg = RenderTextMessage(message, islandRoles);
+        var renderMsg = RenderTextMessage(message, roleList);
         var emojiList = message.Emojis.Select(x => x.EmojiCode).ToList();
-
+        
         if (string.IsNullOrEmpty(message.MessageId))
         {
             var sendResult = await openApiService.SetChannelMessageSendAsync(new SetChannelMessageSendInput<MessageBodyText>
             {
                 ChannelId = message.Channel, MessageBody = new MessageBodyText { Content = renderMsg }
             });
-
+        
             if (sendResult is null)
             {
                 return MESSAGE_SEND_FAILED;
@@ -517,7 +491,7 @@ public class RoleReactionCommand : ICommandExecutor
                 {
                     MessageBody = new MessageBodyText { Content = renderMsg }, MessageId = message.MessageId
                 });
-
+        
             if (updateResult is false)
             {
                 return MESSAGE_UPDATE_FAILED;
@@ -532,7 +506,35 @@ public class RoleReactionCommand : ICommandExecutor
                 MessageId = message.MessageId
             });
         }
-
+        
         return message.MessageId;
+    }
+    
+    private static string RenderTextMessage(ReactionMessage message, IEnumerable<GetRoleListOutput> roleList)
+    {
+        var builder = new StringBuilder();
+    
+        if (string.IsNullOrWhiteSpace(message.HeaderText) is false)
+        {
+            builder.AppendLine(message.HeaderText);
+            builder.AppendLine();
+        }
+    
+        var bodyText = from emoji in message.Emojis
+            let roleName = roleList.FirstOrDefault(x => x.RoleId == emoji.RoleId)?.RoleName ?? "~~`未知`~~"
+            select message.BodyTemplate
+                .Replace("{{Emoji}}", emoji.EmojiCode)
+                .Replace("{{Role}}", roleName);
+    
+        builder.AppendJoin('\n', bodyText);
+    
+        if (string.IsNullOrWhiteSpace(message.FooterText) is false)
+        {
+            builder.AppendLine();
+            builder.AppendLine(message.FooterText);
+        }
+    
+        var msg = builder.ToString();
+        return msg;
     }
 }

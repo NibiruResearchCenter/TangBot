@@ -11,21 +11,22 @@
 // but WITHOUT ANY WARRANTY
 
 using DodoHosted.App.Core;
-using DodoHosted.Lib.Plugin;
+using DodoHosted.Lib.Plugin.Services;
 using Serilog;
 using Serilog.Events;
 
-PluginManager.NativeAssemblies.AddRange(new []
+PluginLoadingManager.NativeAssemblies.AddRange(new []
 {
-    // typeof(RoleReaction.Entry).Assembly
+    typeof(RoleReaction.Configuration).Assembly
     // typeof(LiveSchedule.Entry).Assembly
-    typeof(BilibiliLiveInformer.Entry).Assembly
+    // typeof(BestLiveSchedule.Entry).Assembly
 });
 
 const string LoggerTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] <{ThreadId} {ThreadName}> {Message:lj}{NewLine}{Exception}";
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(outputTemplate: LoggerTemplate)
+    .WriteTo.File(outputTemplate: LoggerTemplate, path: "logs/log.txt", rollingInterval: RollingInterval.Day)
     .Enrich.WithThreadId()
     .Enrich.WithThreadName()
     .Enrich.FromLogContext()

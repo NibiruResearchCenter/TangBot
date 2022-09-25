@@ -8,14 +8,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="DodoHosted.App.Core" Version="2.0.5" />
+      <PackageReference Include="DodoHosted.App.Core" Version="3.0.1" />
       <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
       <PackageReference Include="Serilog.Extensions.Hosting" Version="5.0.1" />
       <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
+      <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\BilibiliLiveInformer\BilibiliLiveInformer.csproj" />
       <ProjectReference Include="..\RoleReaction\RoleReaction.csproj" />
     </ItemGroup>
 

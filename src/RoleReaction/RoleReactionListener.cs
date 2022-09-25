@@ -13,26 +13,38 @@
 using DoDo.Open.Sdk.Models.Members;
 using DoDo.Open.Sdk.Models.Roles;
 using DoDo.Open.Sdk.Services;
+using DodoHosted.Base.App.Attributes;
 using DodoHosted.Base.App.Interfaces;
 using DodoHosted.Base.Events;
 using DodoHosted.Open.Plugin;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using RoleReaction.Model;
 
 namespace RoleReaction;
 
-public class RoleReactionListener : IDodoHostedPluginEventHandler<DodoMessageReactionEvent>
+public sealed class RoleReactionListener : IEventHandler<DodoMessageReactionEvent>
 {
-    public async Task Handle(DodoMessageReactionEvent @event, IServiceProvider provider, ILogger logger)
+    private readonly IMongoCollection<ReactionMessage> _collection;
+    private readonly IChannelLogger _channelLogger;
+    private readonly OpenApiService _openApiService;
+
+    public RoleReactionListener(
+        [Inject] IMongoCollection<ReactionMessage> collection,
+        [Inject] IChannelLogger channelLogger,
+        [Inject] OpenApiService openApiService)
     {
-        var collection = provider.GetRequiredService<IMongoDatabase>().GetCollection<ReactionMessage>("tb-rr-messages");
-        var msgId = @event.Message.Data.EventBody.ReactionTarget.Id;
-        var emoji = @event.Message.Data.EventBody.ReactionEmoji.Id;
-        var isAdd = @event.Message.Data.EventBody.ReactionType == 1;
+        _collection = collection;
+        _channelLogger = channelLogger;
+        _openApiService = openApiService;
+    }
+    
+    public async Task Handle(DodoMessageReactionEvent eventContext)
+    {
+        var msgId = eventContext.Message.Data.EventBody.ReactionTarget.Id;
+        var emoji = eventContext.Message.Data.EventBody.ReactionEmoji.Id;
+        var isAdd = eventContext.Message.Data.EventBody.ReactionType == 1;
         
-        var message = await collection
+        var message = await _collection
             .Find(x => x.MessageId == msgId)
             .FirstOrDefaultAsync();
 
@@ -43,17 +55,14 @@ public class RoleReactionListener : IDodoHostedPluginEventHandler<DodoMessageRea
             return;
         }
 
-        var user = @event.Message.Data.EventBody.DodoId;
-        var island = @event.Message.Data.EventBody.IslandId;
+        var user = eventContext.Message.Data.EventBody.DodoId;
+        var island = eventContext.Message.Data.EventBody.IslandId;
 
-        var openApi = provider.GetRequiredService<OpenApiService>();
-        var channelLogger = provider.GetRequiredService<IChannelLogger>();
-
-        var userRoles = (await openApi.GetMemberRoleListAsync(new GetMemberRoleListInput
+        var userRoles = (await _openApiService.GetMemberRoleListAsync(new GetMemberRoleListInput
         {
             DodoId = user, IslandId = island
         })).Select(x => x.RoleId).ToList();
-        var islandRoles = (await openApi
+        var islandRoles = (await _openApiService
                 .GetRoleListAsync(new GetRoleListInput { IslandId = island }, true))
             .ToDictionary(x => x.RoleId, x => x.RoleName);
         
@@ -63,46 +72,46 @@ public class RoleReactionListener : IDodoHostedPluginEventHandler<DodoMessageRea
         {
             if (userRoles.Contains(reaction.RoleId) is false)
             {
-                var result = await openApi.SetRoleMemberAddAsync(new SetRoleMemberAddInput
+                var result = await _openApiService.SetRoleMemberAddAsync(new SetRoleMemberAddInput
                 {
                     DodoId = user, IslandId = island, RoleId = reaction.RoleId
                 });
 
                 if (result)
                 {
-                    await channelLogger.LogInformation(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，已赋予身份组 {roleName}");
+                    await _channelLogger.LogInformation(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，已赋予身份组 {roleName}");
                 }
                 else
                 {
-                    await channelLogger.LogWarning(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，但是赋予身份组 {roleName} ***失败***");
+                    await _channelLogger.LogWarning(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，但是赋予身份组 {roleName} ***失败***");
                 }
             }
             else
             {
-                await channelLogger.LogInformation(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，但是其已经拥有身份组 {roleName}");
+                await _channelLogger.LogInformation(island, $"用户 <@!{user}> 选择 {reaction.EmojiCode}，但是其已经拥有身份组 {roleName}");
             }
         }
         else
         {
             if (userRoles.Contains(reaction.RoleId))
             {
-                var result = await openApi.SetRoleMemberRemoveAsync(new SetRoleMemberRemoveInput
+                var result = await _openApiService.SetRoleMemberRemoveAsync(new SetRoleMemberRemoveInput
                 {
                     DodoId = user, IslandId = island, RoleId = reaction.RoleId
                 });
                 
                 if (result)
                 {
-                    await channelLogger.LogInformation(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，已撤回身份组 {roleName}");
+                    await _channelLogger.LogInformation(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，已撤回身份组 {roleName}");
                 }
                 else
                 {
-                    await channelLogger.LogWarning(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，但是撤回身份组 {roleName} 失败");
+                    await _channelLogger.LogWarning(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，但是撤回身份组 {roleName} 失败");
                 }
             }
             else
             {
-                await channelLogger.LogInformation(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，但是其没有身份组 {roleName}");
+                await _channelLogger.LogInformation(island, $"用户 <@!{user}> 取消选择 {reaction.EmojiCode}，但是其没有身份组 {roleName}");
             }
         }
     }

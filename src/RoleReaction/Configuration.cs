@@ -11,23 +11,17 @@
 // but WITHOUT ANY WARRANTY
 
 using DodoHosted.Open.Plugin;
-using Microsoft.Extensions.Logging;
+using RoleReaction.Model;
 
 namespace RoleReaction;
 
-public class Entry : IPluginLifetime
+public sealed class Configuration : DodoHostedPluginConfiguration
 {
-    public Task Load(IServiceProvider serviceProvider, ILogger logger)
+    public override Dictionary<Type, string> RegisterMongoDbCollection()
     {
-        logger.LogInformation("已载入 RoleReaction 插件");
-        
-        return Task.CompletedTask;
-    }
-
-    public Task Unload(ILogger logger)
-    {
-        logger.LogInformation("已卸载 RoleReaction 插件");
-        
-        return Task.CompletedTask;
+        return new Dictionary<Type, string>
+        {
+            { typeof(ReactionMessage), "tb-rr-messages" }
+        };
     }
 }
