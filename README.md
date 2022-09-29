@@ -13,23 +13,24 @@
 - [x] 基本功能
 - [ ] 使用卡片消息进行配置 [Delayed]
 
-## LiveSchedule [Delayed]
+## BestliveSchedule [Delayed]
 
 - [ ] 添加，覆盖，删除
-- [ ] 渲染
-- [ ] 命令行
-- [ ] 后台服务
+- [x] 消息卡片
+- [ ] 指令系统
+- [x] 后台服务
 
-## BilibiliLiveNoInformer
+## BilibiliLiveNotification
 
 - [x] 订阅和通知
-- [ ] 卡片消息 [Delayed]
-- [ ] 分布式请求任务
+- [x] 卡片消息
 
-## Ohayo
+## BilibiliLiveGuardCertifier
 
-- [ ] 每日消息数量统计
-- [ ] 晨报
+- [ ] 指令系统
+- [ ] 直播间监听工具
+- [ ] Web 接口
+- [ ] 内部接口 [等待 DodoHosted 内部接口调用功能更新]
 
 # 许可证
 
