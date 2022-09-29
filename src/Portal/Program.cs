@@ -18,7 +18,8 @@ using Serilog.Events;
 PluginLoadingManager.NativeAssemblies.AddRange(new []
 {
     typeof(RoleReaction.Configuration).Assembly,
-    typeof(BilibiliLiveNotification.Configuration).Assembly
+    typeof(BilibiliLiveNotification.Configuration).Assembly,
+    typeof(BestliveSchedule.Configuration).Assembly,
 });
 
 const string LoggerTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}] <{ThreadId} {ThreadName}> {Message:lj}{NewLine}{Exception}";
