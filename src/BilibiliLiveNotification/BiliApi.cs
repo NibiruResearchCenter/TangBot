@@ -198,6 +198,11 @@ public static class BiliApi
                 var startTimestamp = obj.Value.GetProperty("live_time").GetInt64();
 
                 var startTime = DateTimeOffset.FromUnixTimeSeconds(startTimestamp).AddHours(8);
+
+                if (string.IsNullOrEmpty(cover))
+                {
+                    cover = obj.Value.GetProperty("keyframe").GetString()!;
+                }
                 
                 results.Add(new LiveCheckResult(uid, isLive, title, cover, startTime));
             }
